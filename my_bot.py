@@ -2,8 +2,10 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from openai import OpenAI
 
-client = OpenAI(api_key="OPENAI_API_KEY")
-TELEGRAM_TOKEN = "TELEGRAM_TOKEN"
+import os
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 user_limits = {}
 
