@@ -1,7 +1,6 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from openai import OpenAI
-
 import os
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -18,7 +17,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # limitni tekshiramiz
     if user_id not in user_limits:
-        user_limits[user_id] = 5  # 5 ta free
+        user_limits[user_id] = 5
 
     if user_limits[user_id] <= 0:
         await update.message.reply_text(
@@ -26,26 +25,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # limit kamayadi
-    user_limits[user_id] -= 1
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": user_text}
+            ]
+        )
 
- try:
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "user", "content": user_text}
-        ]
+        bot_reply = response.choices[0].message.content
+
+        # faqat muvaffaqiyatli bo‘lsa kamayadi
+        user_limits[user_id] -= 1
+
+    except Exception as e:
+        bot_reply = f"Xatolik: {e}"
+
+    await update.message.reply_text(
+        f"{bot_reply}\n\n🧠 Qoldi: {user_limits[user_id]}"
     )
-
-    bot_reply = response.choices[0].message.content
-
-    # faqat muvaffaqiyatli bo‘lsa kamaytiramiz
-    user_limits[user_id] -= 1
-
-except Exception as e:
-    bot_reply = f"Xatolik: {e}"
-
-    await update.message.reply_text(bot_reply)
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
