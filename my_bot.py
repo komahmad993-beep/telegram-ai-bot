@@ -29,18 +29,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # limit kamayadi
     user_limits[user_id] -= 1
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "user", "content": user_text}
-            ]
-        )
+ try:
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "user", "content": user_text}
+        ]
+    )
 
-        bot_reply = response.choices[0].message.content
+    bot_reply = response.choices[0].message.content
 
-    except Exception as e:
-        bot_reply = f"Xatolik: {e}"
+    # faqat muvaffaqiyatli bo‘lsa kamaytiramiz
+    user_limits[user_id] -= 1
+
+except Exception as e:
+    bot_reply = f"Xatolik: {e}"
 
     await update.message.reply_text(bot_reply)
 
