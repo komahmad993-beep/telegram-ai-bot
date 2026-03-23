@@ -8,6 +8,8 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 user_data = {}
 
+premium_users = set()
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🚀 Salom! Men @InspiRocketBot")
 
@@ -17,6 +19,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_text = update.message.text
     username = update.message.from_user.username or "no_username"
+
+    if user_id in premium_users:
+        # premium user → limit yo‘q
+        limit_text = "♾ Premium"
+    else:
+        # oddiy limit ishlaydi
 
     # LOG (terminalda ko‘rish)
     print(f"{user_id} (@{username}): {user_text}")
@@ -32,23 +40,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     today = datetime.now().date()
 
     # user yo‘q bo‘lsa
+  if user_id not in premium_users:
     if user_id not in user_data:
-        user_data[user_id] = {
-            "date": today,
-            "limit": 15
-        }
+        user_data[user_id] = {"date": today, "limit": 15}
 
-    # yangi kun bo‘lsa reset
     if user_data[user_id]["date"] != today:
         user_data[user_id]["date"] = today
         user_data[user_id]["limit"] = 15
 
-    # limit tugagan bo‘lsa
     if user_data[user_id]["limit"] <= 0:
         await update.message.reply_text(
-            "🚫 Kunlik limit tugadi (15 ta).\n💰 Premium olish uchun yozing."
+            "🚫 Kunlik limit tugadi.\n💰 Premium olish uchun yozing: @your_username"
         )
         return
+
+      if user_id in premium_users:
+    info = "♾ Premium"
+else:
+    info = f"{user_data[user_id]['limit']}/15"
+
+await update.message.reply_text(
+    f"{bot_reply}\n\n🧠 Qoldi: {info}"
+)
+
+async def add_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id != 365165021:
+        return
+
+    target_id = int(context.args[0])
+    premium_users.add(target_id)
+
+    await update.message.reply_text(f"✅ {target_id} premium bo‘ldi")
+
+app.add_handler(CommandHandler("addpremium", add_premium))
 
     try:
         response = client.chat.completions.create(
