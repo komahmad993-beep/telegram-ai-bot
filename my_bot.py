@@ -1,6 +1,6 @@
 import sqlite3
 from flask import Flask, request, jsonify
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from openai import OpenAI
 import os
@@ -11,6 +11,8 @@ import threading
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = 365165021
+
+VIDEO_URL = "https://your-video-link.mp4"  # 🔥 shu yerga video link qo‘y
 
 # ===== DATABASE =====
 conn = sqlite3.connect("bot.db", check_same_thread=False)
@@ -23,21 +25,51 @@ CREATE TABLE IF NOT EXISTS users (
     last_date TEXT,
     limit_count INTEGER,
     is_premium INTEGER DEFAULT 0,
-    premium_until TEXT,
-    reminded INTEGER DEFAULT 0,
-    total_paid INTEGER DEFAULT 0
+    premium_until TEXT
 )
 """)
 conn.commit()
 
-# ===== TELEGRAM BOT =====
+# ===== START (WELCOME + VIDEO) =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    await update.message.reply_text(
-        f"🚀 Salom!\n\n🤖 AI yordamchi bot\n🎁 Kuniga 2 ta bepul\n\n🆔 ID: {user_id}"
+
+    text = f"""
+🚀 InspiRocket AI ga xush kelibsiz!
+
+🤖 Men sizga yordam beraman:
+✈️ Bilet topish
+🏨 Hotel qidirish
+🚗 Mashina topish
+🌐 Internetdan ma’lumot
+🧠 AI javoblar
+
+💰 Kuniga 2 ta bepul savol
+
+🆔 ID: {user_id}
+
+👇 Masalan yozing:
+"Dubayga arzon bilet top"
+"""
+
+    # VIDEO
+    await update.message.reply_video(
+        video=VIDEO_URL,
+        caption="🎥 Bot qanday ishlaydi"
     )
 
-# ===== HANDLE MESSAGE =====
+    # BUTTONS
+    keyboard = [
+        ["✈️ Bilet top", "🏨 Hotel"],
+        ["🚗 Mashina", "ℹ️ Yordam"]
+    ]
+
+    await update.message.reply_text(
+        text,
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    )
+
+# ===== MESSAGE =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     username = update.message.from_user.username or "no_username"
@@ -52,14 +84,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not user:
         cursor.execute(
-            "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (user_id, username, today, 2, 0, None, 0, 0)
+            "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, username, today, 2, 0, None)
         )
         conn.commit()
         limit = 2
         premium_until = None
     else:
-        _, _, last_date, limit, is_premium, premium_until, _, _ = user
+        _, _, last_date, limit, is_premium, premium_until = user
 
         if last_date != today:
             limit = 2
@@ -128,12 +160,11 @@ async def add_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     conn.commit()
 
-    await update.message.reply_text(f"✅ Premium: {expire_date}")
+    await update.message.reply_text(f"✅ Premium berildi: {expire_date}")
 
 # ===== FLASK =====
 app_flask = Flask(__name__)
 
-# ===== WEB CHAT API =====
 @app_flask.route("/chat", methods=["POST"])
 def web_chat():
     data = request.json
@@ -150,64 +181,22 @@ def web_chat():
 
     return jsonify({"reply": reply})
 
-# ===== PAYMENT =====
 @app_flask.route("/payment", methods=["POST"])
 def payment():
     data = request.json or {}
     user_id = int(data.get("user_id", 0))
 
-    if user_id == 0:
-        return {"error": "no user_id"}
-
-    cursor.execute("SELECT premium_until FROM users WHERE user_id=?", (user_id,))
-    result = cursor.fetchone()
-
-    if result and result[0]:
-        old_date = datetime.strptime(result[0], "%Y-%m-%d")
-        new_date = old_date + timedelta(days=30) if old_date > datetime.now() else datetime.now() + timedelta(days=30)
-    else:
-        new_date = datetime.now() + timedelta(days=30)
-
-    expire_date = new_date.strftime("%Y-%m-%d")
+    expire_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
 
     cursor.execute(
-        "UPDATE users SET is_premium=1, premium_until=?, total_paid=total_paid+1 WHERE user_id=?",
+        "UPDATE users SET is_premium=1, premium_until=? WHERE user_id=?",
         (expire_date, user_id)
     )
     conn.commit()
 
-    print(f"💰 PAYMENT: {user_id} → {expire_date}")
-
     return {"status": "ok"}
 
-# ===== DASHBOARD =====
-@app_flask.route("/admin")
-def admin_panel():
-    password = request.args.get("pass")
-
-    if password != "1234":
-        return "❌ Access denied"
-
-    cursor.execute("SELECT COUNT(*) FROM users")
-    total = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(*) FROM users WHERE is_premium=1")
-    premium = cursor.fetchone()[0]
-
-    cursor.execute("SELECT SUM(total_paid) FROM users")
-    payments = cursor.fetchone()[0] or 0
-
-    income = payments * 20000
-
-    return f"""
-    <h1>🚀 Dashboard</h1>
-    <p>Users: {total}</p>
-    <p>Premium: {premium}</p>
-    <p>Payments: {payments}</p>
-    <p>Income: {income} so'm</p>
-    """
-
-# ===== TELEGRAM RUN =====
+# ===== RUN =====
 def run_bot():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
@@ -218,7 +207,6 @@ def run_bot():
     print("🚀 Bot ishlayapti...")
     app.run_polling()
 
-# ===== RUN =====
 threading.Thread(target=run_bot).start()
 
 app_flask.run(host="0.0.0.0", port=8080)
