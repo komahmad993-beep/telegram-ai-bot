@@ -116,3 +116,4 @@ if __name__ == "__main__":
 
     print("🚀 Bot ishlayapti...")
     app.run_polling()
+# force rebuild
