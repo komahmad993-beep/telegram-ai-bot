@@ -12,7 +12,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = 365165021
 
-VIDEO_URL = "https://your-video-link.mp4"  # 🔥 shu yerga video link qo‘y
+VIDEO_URL = "https://your-video-link.mp4"  # video link qo'y
 
 # ===== DATABASE =====
 conn = sqlite3.connect("bot.db", check_same_thread=False)
@@ -30,52 +30,29 @@ CREATE TABLE IF NOT EXISTS users (
 """)
 conn.commit()
 
-# ===== START (WELCOME + VIDEO) =====
+# ===== START =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
 
-    text = f"""
-🚀 InspiRocket AI ga xush kelibsiz!
-
-🤖 Men sizga yordam beraman:
-✈️ Bilet topish
-🏨 Hotel qidirish
-🚗 Mashina topish
-🌐 Internetdan ma’lumot
-🧠 AI javoblar
-
-💰 Kuniga 2 ta bepul savol
-
-🆔 ID: {user_id}
-
-👇 Masalan yozing:
-"Dubayga arzon bilet top"
-"""
-
-    # VIDEO
     await update.message.reply_video(
         video=VIDEO_URL,
         caption="🎥 Bot qanday ishlaydi"
     )
 
-    # BUTTONS
     keyboard = [
-        ["✈️ Bilet top", "🏨 Hotel"],
+        ["✈️ Bilet", "🏨 Hotel"],
         ["🚗 Mashina", "ℹ️ Yordam"]
     ]
 
     await update.message.reply_text(
-        text,
+        f"🚀 InspiRocket AI\n\n2 ta bepul savol\nID: {user_id}",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
 
 # ===== MESSAGE =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    username = update.message.from_user.username or "no_username"
     user_text = update.message.text
-
-    print(f"{user_id} (@{username}): {user_text}")
 
     today = str(datetime.now().date())
 
@@ -85,11 +62,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         cursor.execute(
             "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, username, today, 2, 0, None)
+            (user_id, "", today, 2, 0, None)
         )
         conn.commit()
         limit = 2
-        premium_until = None
     else:
         _, _, last_date, limit, is_premium, premium_until = user
 
@@ -101,25 +77,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             conn.commit()
 
-    # ===== PREMIUM CHECK =====
+    # premium check
     is_premium = False
     if user and user[5]:
         expire = datetime.strptime(user[5], "%Y-%m-%d")
         if expire > datetime.now():
             is_premium = True
 
-    # ===== LIMIT =====
     if not is_premium and limit <= 0:
-        keyboard = [
-            [InlineKeyboardButton("💰 Premium olish", url="https://t.me/InspiRocketBot")]
-        ]
-        await update.message.reply_text(
-            "🚫 Limit tugadi (2 ta)",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await update.message.reply_text("🚫 Limit tugadi")
         return
 
-    # ===== AI =====
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -136,77 +104,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.commit()
 
     except Exception as e:
-        bot_reply = f"Xatolik: {e}"
+        bot_reply = str(e)
 
-    # ===== INFO =====
-    if is_premium:
-        info = f"♾ Premium ({premium_until})"
-    else:
-        info = f"{limit}/2"
-
-    await update.message.reply_text(f"{bot_reply}\n\n🧠 Qoldi: {info}")
-
-# ===== ADMIN =====
-async def add_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        return
-
-    user_id = int(context.args[0])
-    expire_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-
-    cursor.execute(
-        "UPDATE users SET is_premium=1, premium_until=? WHERE user_id=?",
-        (expire_date, user_id)
-    )
-    conn.commit()
-
-    await update.message.reply_text(f"✅ Premium berildi: {expire_date}")
+    await update.message.reply_text(bot_reply)
 
 # ===== FLASK =====
 app_flask = Flask(__name__)
 
 @app_flask.route("/chat", methods=["POST"])
-def web_chat():
+def chat():
     data = request.json
-    user_text = data.get("message", "")
+    msg = data.get("message", "")
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": user_text}]
-        )
-        reply = response.choices[0].message.content
-    except Exception as e:
-        reply = str(e)
-
-    return jsonify({"reply": reply})
-
-@app_flask.route("/payment", methods=["POST"])
-def payment():
-    data = request.json or {}
-    user_id = int(data.get("user_id", 0))
-
-    expire_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-
-    cursor.execute(
-        "UPDATE users SET is_premium=1, premium_until=? WHERE user_id=?",
-        (expire_date, user_id)
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": msg}]
     )
-    conn.commit()
 
-    return {"status": "ok"}
+    return jsonify({"reply": response.choices[0].message.content})
 
 # ===== RUN =====
 def run_bot():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("addpremium", add_premium))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    print("🚀 Bot ishlayapti...")
     app.run_polling()
 
 threading.Thread(target=run_bot).start()
 
-app_flask.run(host="0.0.0.0", port=8080)
+port = int(os.environ.get("PORT", 8080))
+app_flask.run(host="0.0.0.0", port=port)
