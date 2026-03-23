@@ -47,10 +47,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         cursor.execute(
             "INSERT INTO users VALUES (?, ?, ?, ?, ?)",
-            (user_id, username, today, 15, 0)
+            (user_id, username, today, 2, 0)
         )
         conn.commit()
-        limit = 15
+        limit = 2
         is_premium = 0
     else:
         _, _, last_date, limit, is_premium = user
@@ -91,7 +91,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         bot_reply = str(e)
 
-    info = "♾ Premium" if is_premium else f"{limit}/15"
+    info = "♾ Premium" if is_premium else f"{limit}/2"
 
     await update.message.reply_text(f"{bot_reply}\n\n🧠 Qoldi: {info}")
 
