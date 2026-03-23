@@ -51,7 +51,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id not in premium_users:
         if user_data[user_id]["limit"] <= 0:
             keyboard = [
-                [InlineKeyboardButton("💰 Premium olish", url="https://t.me/phenomenal_ak")
+                [InlineKeyboardButton("💰 Premium olish", url="https://t.me/phenomenal_ak")]
             ]
 
             await update.message.reply_text(
