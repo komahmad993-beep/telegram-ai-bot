@@ -16,8 +16,18 @@ from datetime import datetime
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_text = update.message.text
-    
-    print(f"{user_id}: (@{username}): {user_text}")
+    username = update.message.from_user.username or "no_username"
+
+    # LOG (terminalda ko‘rish)
+    print(f"{user_id} (@{username}): {user_text}")
+
+    # ADMINGA YUBORISH
+    ADMIN_ID = 365165021
+
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"👤 {user_id} (@{username})\n💬 {user_text}"
+    )
 
     today = datetime.now().date()
 
